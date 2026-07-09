@@ -4,10 +4,14 @@ import com.example.demo.entity.Order;
 import com.example.demo.entity.Product;
 import com.example.demo.enums.Size;
 import jakarta.persistence.*;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Min;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.Date;
 
 
@@ -16,15 +20,20 @@ import java.util.Date;
 @NoArgsConstructor
 public class OrderItemResponse {
 
+    @Min(1)
     private Long oiid;
 
+    @Min(1)
     private Long pid;
 
-    private Date createdAt=new Date();
 
-    private int priceAtPurchase;
+    private LocalDateTime createdAt;
 
-    private  int totalAmountOfItem;
+    @DecimalMin("0.00")
+    private BigDecimal priceAtPurchase;
+
+    @DecimalMin("0.00")
+    private  BigDecimal totalAmountOfItem;
 
 
 

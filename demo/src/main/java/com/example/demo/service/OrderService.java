@@ -1,194 +1,232 @@
 package com.example.demo.service;
 
+import com.example.demo.Mapper.OrderMapper;
 import com.example.demo.dto.OrderEntry;
 import com.example.demo.dto.OrderEntryRequest;
 import com.example.demo.dto.OrderItemResponse;
 import com.example.demo.dto.OrderResponseRequest;
-import com.example.demo.entity.Order;
-import com.example.demo.entity.OrderItem;
-import com.example.demo.entity.Product;
-import com.example.demo.entity.Stock;
+import com.example.demo.entity.*;
 import com.example.demo.enums.Size;
 import com.example.demo.enums.Status;
+import com.example.demo.event.OrderDeliveredEvent;
 import com.example.demo.exception.ResourceNotFoundException;
-import com.example.demo.repository.OrderItemRepository;
-import com.example.demo.repository.OrderRepository;
-import com.example.demo.repository.ProductRepository;
-import com.example.demo.repository.StockRepository;
-import org.aspectj.weaver.ast.Or;
+import com.example.demo.repository.*;
+import com.example.demo.specification.OrderSpecification;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import com.example.demo.exception.InsufficientStockException;
 
-import javax.naming.InsufficientResourcesException;
-import java.util.ArrayList;
-import java.util.List;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.*;
+import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 public class OrderService {
     private OrderRepository orderRepository;
     private ProductRepository productRepository;
     private StockRepository stockRepository;
+    private UserRepository userRepository;
+    private OrderItemService orderItemService;
     private OrderItemRepository orderItemRepository;
-    public OrderService(OrderRepository orderRepository,ProductRepository productRepository,StockRepository stockRepository,OrderItemRepository orderItemRepository)
+    private OrderMapper orderMapper;
+    private OrderTransitionService orderTransitionService;
+    private StockTransitionService stockTransitionService;
+    private ApplicationEventPublisher eventPublisher;
+    private InvoiceService invoiceService;
+
+
+
+    public OrderService(InvoiceService invoiceService,ApplicationEventPublisher eventPublisher,OrderTransitionService orderTransitionService,StockTransitionService stockTransitionService,OrderMapper orderMapper,OrderItemService orderItemService,OrderRepository orderRepository,ProductRepository productRepository,StockRepository stockRepository,OrderItemRepository orderItemRepository,UserRepository userRepository)
     {
+        this.invoiceService=invoiceService;
+        this.orderTransitionService=orderTransitionService;
+        this.stockTransitionService=stockTransitionService;
+        this.orderMapper=orderMapper;
+        this.orderItemRepository=orderItemRepository;
         this.orderRepository=orderRepository;
         this.productRepository=productRepository;
         this.stockRepository=stockRepository;
-        this.orderItemRepository=orderItemRepository;
+        this.userRepository=userRepository;
+        this.orderItemService=orderItemService;
+        this.eventPublisher=eventPublisher;
     }
-    @Transactional
-    public void deleteOrder(Long id)
+
+
+    @Transactional(readOnly = true)
+    public Page<OrderResponseRequest> getAllOrders(Status status, LocalDateTime createdAt,BigDecimal amount,Long userId,Pageable pageable) {
+        log.info("getAllOrders called  for status {}, created after {} and more than amount {}",status,createdAt,amount);
+        Specification<Order> spec= OrderSpecification.hasStatus(status)
+                .and(OrderSpecification.hasCreatedAt(createdAt))
+                .and(OrderSpecification.hasAmount(amount));
+        Page<Order> orderPage=orderRepository.findAll(spec,pageable);
+        List<Order> orderList=orderPage.getContent();
+        List<Long> orderIds=orderList.stream().map(Order::getOrderId).collect(Collectors.toList());
+        List<OrderItem > orderItemList=orderItemRepository.findAllByOrderIdIn(orderIds);
+        Map<Long,List<OrderItem>> orderItemMap=orderItemList.stream()
+                .collect(Collectors.groupingBy(oi->oi.getOrder().getOrderId()));
+
+//      // mapping the second level depth the produc t
+        List<Long> productId=orderItemList.stream()
+                .map(oi->oi.getProduct().getPid())
+                .distinct()
+                .collect(Collectors.toList());
+        List<Product> productList=productRepository.getProductByIds(productId);
+
+        Map<Long,Product> productMap=productList.stream()
+                .collect(Collectors.toMap(p->p.getPid(),p->p));
+        log.debug("Returning getallorders with {} orders ,{} orderItems",orderList.size(),orderItemList.size());
+
+        return orderPage.map(order ->
+            orderMapper.mapToEnityOrderResponseRequest(order,orderItemMap.getOrDefault(order.getOrderId(),List.of()),productMap)
+        );
+    }
+
+    @Transactional(isolation = Isolation.READ_COMMITTED,
+            propagation = Propagation.REQUIRED,
+            timeout = 30)
+    public OrderResponseRequest createOrder(OrderEntryRequest orderEntryRequest)
     {
-        Order order=orderRepository.findById(id).orElseThrow(
+        log.info("Create order called with {} items",orderEntryRequest.getOde().size());
+        List<OrderEntry> sortedOrderEntry = orderEntryRequest.getOde()
+                .stream()
+                .sorted(Comparator.comparing(OrderEntry::getPid))
+                .collect(Collectors.toList());
+        List<Long> productIds=sortedOrderEntry.stream()
+                .map(orderEntry -> orderEntry.getPid())
+                .distinct()
+                .collect(Collectors.toList());
+        List<Product> productList=productRepository.getProductByIds(productIds);
+
+        Map<Long,Product> productMap=productList.stream()
+                .collect(Collectors.toMap(p->p.getPid(),p->p));
+
+
+
+        Order order=new Order();
+        order.setStatus(Status.ORDERED);
+        String username = SecurityContextHolder.getContext()
+                .getAuthentication()
+                .getName();
+//        1
+
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        order.setUser(user);
+        log.info("The user  {} attached to order  ",username);
+        List<OrderEntry> sorted = orderEntryRequest.getOde()
+                .stream()
+                .sorted(Comparator.comparing(OrderEntry::getPid))
+                .collect(Collectors.toList());
+        for(OrderEntry oe:sorted)
+        {
+            OrderItem orderItem=orderItemService.createOrderItem(oe,order,productMap.getOrDefault(oe.getPid(),null));
+            order.addItem(orderItem);
+        }
+        BigDecimal cost=BigDecimal.ZERO;
+        BigDecimal amount=BigDecimal.ZERO;
+        for(OrderItem oi:order.getOrderItemList())
+        {
+            cost=cost.add(oi.getTotalCostOfItem());
+            amount=amount.add(oi.getTotalAmountOfItem());
+        }
+        order.setTotalAmount(amount);
+        order.setTotalCost(cost);
+        order.setTotalProfit(amount.subtract(cost));
+
+        orderRepository.saveAndFlush(order);
+
+        log.info("Order created successfully, orderId={}, totalAmount={}",
+                order.getOrderId(), order.getTotalAmount());
+
+        OrderResponseRequest orderResponseRequest= orderMapper.mapToEnityOrderResponseRequest(order);
+
+        return orderResponseRequest;
+    }
+
+    @Transactional
+    public OrderResponseRequest deleteOrder(Long id)
+    {
+        log.info("Delete order called for {} order ",id);
+        Order order=orderRepository.findByIdWithItems(id).orElseThrow(
                 ()->new ResourceNotFoundException("Order with id "+id+" not FOUND for deleting."));
         if (order.getStatus() == Status.CANCELLED) {
+            log.warn("Order {} is already cancelled ",id);
             throw new IllegalStateException("Order already cancelled");
         }
 
         if (order.getStatus() == Status.DELIVERED) {
+            log.warn("Order {} is already delivered ",id);
             throw new IllegalStateException("Delivered order cannot be cancelled");
         }
+//        List<OrderItem> orderItemList=orderItemRepository.findAllByOrderIdIn(List.of(id));
         for(OrderItem oi:order.getOrderItemList())
         {
-            deleteOrderItem(oi);
+            orderItemService.deleteOrderItem(oi);
         }
         order.setStatus(Status.CANCELLED);
-        orderRepository.save(order);
+        order.setDeleted(true);
+        Order savedOrder=orderRepository.save(order);
+
+        OrderResponseRequest orderResponseRequest= orderMapper.mapToEnityOrderResponseRequest(savedOrder);
+        log.info("Order {} and its {} Orderitem deleted succesfully",order.getOrderId(),order.getOrderItemList().size());
+
+        return orderResponseRequest;
     }
-    public void deleteOrderItem(OrderItem orderItem)
-    {
-        Stock stock=stockRepository.findByPidAndSize(orderItem.getProduct().getPid(),orderItem.getSize());
-        stock.setQuantity(stock.getQuantity()+orderItem.getQuantity());
-        stockRepository.save(stock);
-    }
-    public List<OrderResponseRequest> getAllOrders()
-    {
-        List<Order> list=orderRepository.findAll();
-        List<OrderResponseRequest> listorr=new ArrayList<>();
-        for(Order order:list)
-        {
-            listorr.add(mapToEnityOrr(order));
-        }
-        if(listorr==null)
-        {
-            throw new ResourceNotFoundException("THere are no orders");
-        }
-        return listorr;
-    }
+
+
+
+
     @Transactional
-    public OrderResponseRequest createOrder(OrderEntryRequest orderEntryRequest)
-    {
-        Order order=new Order();
-        for(OrderEntry oe:orderEntryRequest.getOde())
-        {
-            OrderItem orderItem=createOrderItem(oe,order);
-            order.addItem(orderItem);
-        }
-        order.setStatus(Status.ORDERED);
-        int cost=0;
-        int amount=0;
-        for(OrderItem oi:order.getOrderItemList())
-        {
-            cost=cost+oi.getTotalCostOfItem();
-            amount=amount+oi.getTotalAmountOfItem();
-        }
-        order.setTotalAmount(amount);
-        order.setTotalCost(cost);
-        order.setTotalProfit(amount-cost);
-        orderRepository.save(order);
-
-        OrderResponseRequest orderResponseRequest=mapToEnityOrr(order);
-
-        return orderResponseRequest;
-    }
-    public OrderResponseRequest mapToEnityOrr(Order order)
-    {
-        OrderResponseRequest orr=new OrderResponseRequest();
-
-        orr.setOid(order.getOrderId());
-        orr.setCreatedAt(order.getCreatedAt());
-        orr.setStatus(order.getStatus());
-        orr.setTotalCost(order.getTotalCost());
-        orr.setTotalProfit(order.getTotalProfit());
-        orr.setTotalAmount(order.getTotalAmount());
-        for(OrderItem oi:order.getOrderItemList())
-        {
-            orr.getOrderItemResponsesList().add(mapToEntityoir(oi));
-        }
-        return orr;
-    }
-    public OrderItemResponse mapToEntityoir(OrderItem orderItem)
-    {
-        OrderItemResponse orderItemResponse=new OrderItemResponse();
-        orderItemResponse.setOiid(orderItem.getOiid());
-        orderItemResponse.setPid(orderItem.getProduct().getPid());
-        orderItemResponse.setTotalAmountOfItem(orderItem.getTotalAmountOfItem());
-        orderItemResponse.setCreatedAt(orderItem.getCreatedAt());
-        orderItemResponse.setQuantity(orderItem.getQuantity());
-        orderItemResponse.setPriceAtPurchase(orderItem.getPriceAtPurchase());
-        orderItemResponse.setSize(orderItem.getSize());
-
-        return orderItemResponse;
-
-    }
-
-
-    public OrderItem createOrderItem(OrderEntry orderEntry,Order order)
-    {
-        Product product=productRepository.findById(orderEntry.getPid())
-                .orElseThrow(()->new ResourceNotFoundException(
-                        "Product with this pid "+orderEntry.getPid()+" dosent exist"
-                ));
-
-        OrderItem orderItem=new OrderItem();
-        Size size=orderEntry.getSize();
-        updateStock(orderEntry);
-        orderItem.setProduct(product);
-        orderItem.setOrder(order);
-        orderItem.setQuantity(orderEntry.getQuantity());
-        orderItem.setSize(size);
-        orderItem=calcCostFields(orderItem,product);
-
-        return orderItem;
-
-    }
-    public Stock updateStock(OrderEntry orderEntry)
-    {
-       Stock stock=stockRepository.findByPidAndSize(orderEntry.getPid(),orderEntry.getSize());
-       if(stock.getQuantity()>=orderEntry.getQuantity())
-       {
-           stock.setQuantity(stock.getQuantity()- orderEntry.getQuantity());
-       }else {
-           throw new InsufficientStockException("Not Enough Stocks");
-       }
-       Stock savedStock=stockRepository.save(stock);
-       return savedStock;
-    }
-    public OrderItem calcCostFields(OrderItem orderItem,Product product)
-    {
-        orderItem.setPriceAtPurchase(product.getSellingPrice());
-        orderItem.setTotalAmountOfItem(product.getSellingPrice()* orderItem.getQuantity());
-        orderItem.setTotalCostOfItem(product.getCostPerUnit()*orderItem.getQuantity());
-        orderItem.setTotalProfitOfItem(orderItem.getTotalAmountOfItem()-orderItem.getTotalCostOfItem());
-        return orderItem;
-
-    }
-
-
-    public OrderResponseRequest getOrderById(Long id) {
-        Order order=orderRepository.findById(id).orElseThrow(
-                ()->new ResourceNotFoundException("The Order with id "+id+" not FOUND."));
-
-        OrderResponseRequest orderResponseRequest=mapToEnityOrr(order);
-        return orderResponseRequest;
-    }
-
     public OrderResponseRequest updateOrderStatus(Long id, Status status) {
-        Order order=orderRepository.findById(id).orElseThrow(
+        log.info("updateOrderStatus is called for order {} to status {}",id,status);
+        Order order=orderRepository.findByIdWithItems(id).orElseThrow(
                 ()->new ResourceNotFoundException("The Order with id "+id+" not FOUND."));
+//  findByIdWithItems loads all the iems eager like all orderitems also but we only need order so
+//  maybe can chnage to findById and fetch just the order and use lazy laoding to impove performace
+        Status previousStatus=order.getStatus();
+        orderTransitionService.validate(previousStatus,status);
+
         order.setStatus(status);
         order=orderRepository.save(order);
-        return mapToEnityOrr(order);
+
+        // Fire stock transition based on new status
+        List<OrderItem> items = order.getOrderItemList();
+        switch (status) {
+            case IN_PRODUCTION -> stockTransitionService.onInProduction(items);
+            case READY         -> stockTransitionService.onOrderReady(items);
+            case DELIVERED     -> stockTransitionService.onOrderDelivered(items);
+            case CANCELLED     -> stockTransitionService.onOrderCancelled(items, previousStatus);
+        }
+
+        log.info("Order {} status changed to {} successfully, stock transition fired", id, status);
+        if (status == Status.DELIVERED) {
+            eventPublisher.publishEvent(new OrderDeliveredEvent(id));
+        }
+
+
+        return orderMapper.mapToEnityOrderResponseRequest(order);
+
+    }
+
+    @Transactional(readOnly = true)
+    public OrderResponseRequest getOrderById(Long id) {
+        log.info("GetorderById called for Order {}",id);
+        Order order=orderRepository.findByIdWithItems(id).orElseThrow(
+                ()->new ResourceNotFoundException("The Order with id "+id+" not FOUND."));
+
+        OrderResponseRequest orderResponseRequest= orderMapper.mapToEnityOrderResponseRequest(order);
+        log.info("Order {} succesfully fetched ",id);
+        return orderResponseRequest;
     }
 }

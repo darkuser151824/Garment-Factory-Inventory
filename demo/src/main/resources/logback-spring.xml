@@ -1,0 +1,20 @@
+<!-- src/main/resources/logback-spring.xml -->
+<configuration>
+    <springProfile name="default,dev">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder>
+                <pattern>
+                    %d{yyyy-MM-dd HH:mm:ss} %5level [%thread]
+                    [reqId=%X{requestId}] [%X{method} %X{uri}] %logger{36} - %msg%n
+                </pattern>
+            </encoder>
+        </appender>
+        <root level="INFO">
+            <appender-ref ref="CONSOLE" />
+        </root>
+        <logger name="com.example.demo" level="DEBUG" />
+    </springProfile>
+</configuration>
+        <!-- %X{requestId} — reads requestId from MDC and includes in every log line -->
+        <!-- %X{method} — reads method (GET, POST, etc.) from MDC -->
+        <!-- %X{uri} — reads URI from MDC -->

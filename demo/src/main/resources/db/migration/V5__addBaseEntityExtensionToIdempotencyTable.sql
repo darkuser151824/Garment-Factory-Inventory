@@ -1,0 +1,3 @@
+ALTER TABLE idempotency_keys
+ADD COLUMN is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+ADD COLUMN updated_at TIMESTAMP;

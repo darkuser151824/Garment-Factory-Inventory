@@ -12,6 +12,10 @@ import lombok.NoArgsConstructor;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 import org.hibernate.validator.constraints.UniqueElements;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
+import java.math.BigDecimal;
+import java.util.List;
 
 @Slf4j
 @Data
@@ -19,10 +23,11 @@ import org.hibernate.validator.constraints.UniqueElements;
 @NoArgsConstructor
 @Entity
 @Table( uniqueConstraints = @UniqueConstraint(columnNames = {"garment","color","fabric"}))
-public class Product {
+@EntityListeners(AuditingEntityListener.class)
+public class Product extends BaseEntity{
 
    @Id
-   @GeneratedValue(strategy = GenerationType.AUTO)
+   @GeneratedValue(strategy = GenerationType.IDENTITY)
    private Long pid;
 
    @NotNull(message = "GARMENT TYPE IS REQUIRED")
@@ -37,9 +42,10 @@ public class Product {
    @Enumerated(EnumType.STRING)
    private Fabric fabric;
 
+    @OneToMany(mappedBy = "product", fetch = FetchType.LAZY)
+    private List<Stock> stockList;
 
+   private BigDecimal sellingPrice;
 
-   private int sellingPrice;
-
-   private int costPerUnit;
+   private BigDecimal costPerUnit;
 }

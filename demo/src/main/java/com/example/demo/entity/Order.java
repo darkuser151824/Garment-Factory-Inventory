@@ -6,7 +6,9 @@ import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -16,25 +18,33 @@ import java.util.List;
 @NoArgsConstructor
 @Entity
 @Table(name = "orders")
-public class Order {
+@EntityListeners(AuditingEntityListener.class)
+public class Order extends BaseEntity{
 
     @Id
-    @GeneratedValue(strategy = GenerationType.AUTO)
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private  Long orderId;
 
-    private Date createdAt=new Date();
+//    many to one is is eager by default
+//    in jpa we just need to make sure it is not chnaged to lazy
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "user_id")
+    private User user;
 
     @Enumerated(EnumType.STRING)
     private Status status;
 
-    private int totalAmount;
+    private BigDecimal totalAmount;
 
-    private int totalCost;
+    private BigDecimal totalCost;
 
-    private int totalProfit;
+    private BigDecimal totalProfit;
 
-    @OneToMany(cascade = CascadeType.ALL,mappedBy = "order")
+    @OneToMany(cascade = {CascadeType.PERSIST,CascadeType.MERGE},mappedBy = "order")
     private List<OrderItem> orderItemList=new ArrayList<>();
+
+    @Column(name = "is_invoice_generated", nullable = false)
+    private Boolean isInvoiceGenerated = false;
 
     public void addItem(OrderItem order)
     {

@@ -2,10 +2,13 @@ package com.example.demo.dto;
 
 import com.example.demo.entity.OrderItem;
 import com.example.demo.enums.Status;
+import jakarta.validation.constraints.DecimalMin;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -19,15 +22,23 @@ public class OrderResponseRequest {
 
     private Status status;
 
-    private Date createdAt;
+    private LocalDateTime createdAt;
 
-    private int totalAmount;
+    private LocalDateTime updatedAt;
 
-    private int totalCost;
+    @DecimalMin("0.00")
+    private BigDecimal totalAmount;
 
-    private int totalProfit;
+    @DecimalMin("0.00")
+    private BigDecimal totalCost;
+
+    @DecimalMin("0.00")
+    private BigDecimal totalProfit;
 
     private List<OrderItemResponse> orderItemResponsesList=new ArrayList<>();
+    private String username;
+    private Long userId;
+
 
     public void addItem(OrderItemResponse orderItemResponse)
     {

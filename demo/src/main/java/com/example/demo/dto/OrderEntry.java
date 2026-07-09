@@ -8,14 +8,16 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
+
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
 public class OrderEntry {
     @NotNull(message = "PId is required")
     private Long pid;
-    @NotNull(message = "COLOR TYPE IS REQUIRED")
+    @NotNull(message = "Size IS REQUIRED")
     private Size size;
-    @Min(value = 2, message = "Quantity must be greater than 1")
+    @Min(value = 1, message = "Quantity must be greater than 1")
     private int quantity;
 }

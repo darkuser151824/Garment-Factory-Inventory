@@ -4,14 +4,12 @@ import com.example.demo.enums.Color;
 import com.example.demo.enums.Fabric;
 import com.example.demo.enums.Garment;
 import com.example.demo.enums.Size;
-import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.sql.Types;
 
 @Data
@@ -30,11 +28,13 @@ public class ProductEntryRequest {
 
     @NotNull(message = "Selling price is required")
     @Positive(message = "Selling price must be positive")
-    private Integer sellingPrice;
+    @DecimalMin("0.00")
+    private BigDecimal sellingPrice;
 
     @NotNull(message = "Cost per unit is required")
     @Positive(message = "Cost per unit must be positive")
-    private Integer costPerUnit;
+    @DecimalMin("0.00")
+    private BigDecimal costPerUnit;
 
     @NotNull
     @Min(0)
