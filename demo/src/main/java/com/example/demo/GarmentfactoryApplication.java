@@ -17,6 +17,9 @@ public class GarmentfactoryApplication {
 
 	public static void main(String[] args) {
 
+
+        System.out.println("DB_PASSWORD length seen by JVM: " + System.getenv("DB_PASSWORD").length());
+        System.out.println("DB_PASSWORD first 3 chars: " + System.getenv("DB_PASSWORD").substring(0, 3));
         ConfigurableApplicationContext run = SpringApplication.run(GarmentfactoryApplication.class, args);
 
     }

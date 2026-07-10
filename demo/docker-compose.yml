@@ -21,7 +21,7 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     ports:git add Dockerfile docker-compose.yml
   git statusgit add Dockerfile docker-compose.yml
-  git status
+  git statusgit
       - "8081:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
