@@ -5,9 +5,9 @@ services:
     ports:
       - "8082:8082"
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/garmentdb
-      DB_PASSWORD: ${DB_PASSWORD}
-      JWT_SECRET: ${JWT_SECRET}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres.railway.internal:5432/railway
+      DB_PASSWORD: BImOGxDXDSqBlmLAjkZFPFZlvGZnlitf
+      JWT_SECRET: WWWWWWWWWWLroklogmujhethamlomujheroklomujhe
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
     depends_on:
@@ -17,11 +17,9 @@ services:
   db:
     image: postgres:16
     environment:
-      POSTGRES_DB: garmentdb
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-    ports:git add Dockerfile docker-compose.yml
-  git statusgit add Dockerfile docker-compose.yml
-  git statusgit
+      POSTGRES_DB: railway
+      POSTGRES_PASSWORD: BImOGxDXDSqBlmLAjkZFPFZlvGZnlitf
+    ports:
       - "8081:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
