@@ -18,6 +18,8 @@ import com.example.demo.repository.StockRepository;
 import com.example.demo.specification.ProductSpecification;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
@@ -41,10 +43,12 @@ public class ProductService {
     private StockRepository stockRepo;
     private StockService stockService;
     private ProductMapper productMapper;
+    private CacheManager cacheManager;
 
 
-    public ProductService(ProductMapper productMapper,ProductRepository productRepository,StockRepository stockRepository,StockService stockService)
+    public ProductService(CacheManager cacheManager,ProductMapper productMapper,ProductRepository productRepository,StockRepository stockRepository,StockService stockService)
     {
+        this.cacheManager=cacheManager;
         this.productMapper=productMapper;
         this.productRepo=productRepository;
         this.stockRepo=stockRepository;
@@ -81,16 +85,22 @@ public class ProductService {
 
 
 
-    @Cacheable(value = "products",key="#id")
+
     @Transactional(readOnly = true)
     public ProductRespsonseRequest getProductById(Long id) {
+        Cache cache=cacheManager.getCache("products");
+        ProductRespsonseRequest cached=cache.get(id,ProductRespsonseRequest.class);
+        if(cached!=null){
+            return cached;
+        }
         log.info("Get product by id called for product {} ",id);
         Product product=productRepo.findById(id).orElseThrow(()->new ResourceNotFoundException("Product with id "+id+" NOt found."));
+
         Map<Size, Stock>  stockMap=stockService.getStockForProduct(product);
         ProductRespsonseRequest productRespsonseRequest=productMapper.mapToEntityPrr(product,stockMap);
         log.info("Product {} fetched successfully ",id);
+        cache.put(id,productRespsonseRequest);
         return productRespsonseRequest;
-
     }
 
 
