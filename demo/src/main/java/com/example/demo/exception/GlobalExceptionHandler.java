@@ -8,6 +8,7 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -23,7 +24,7 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(InvalidTransitionException.class)
-    public ResponseEntity<ErrorResponse> handleTransition(InsufficientStockException ex) {
+    public ResponseEntity<ErrorResponse> handleTransition(InvalidTransitionException ex) {
         return new ResponseEntity<>(
                 new ErrorResponse(false, ex.getMessage(), HttpStatus.CONFLICT.value()),
                 HttpStatus.CONFLICT);
@@ -57,6 +58,13 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(
                 new ErrorResponse(false, "Authentication failed — please login", HttpStatus.UNAUTHORIZED.value()),
                 HttpStatus.UNAUTHORIZED);
+    }
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        String message = String.format("Invalid value '%s' for parameter '%s'", ex.getValue(), ex.getName());
+        return new ResponseEntity<>(
+                new ErrorResponse(false, message, HttpStatus.BAD_REQUEST.value()),
+                HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(AccessDeniedException.class)

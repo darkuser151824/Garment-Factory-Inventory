@@ -11,6 +11,7 @@ import com.example.demo.repository.StockRepository;
 import com.example.demo.specification.StockSpecification;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.CacheManager;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -30,13 +31,15 @@ import java.util.stream.Collectors;
 public class StockService {
     private StockRepository stockRepo;
     private ProductRepository prodRepo;
+    private CacheManager cacheManager;
 
 
 
-    public StockService(StockRepository stockRepository,ProductRepository productRepository)
+    public StockService(CacheManager cacheManager,StockRepository stockRepository,ProductRepository productRepository)
     {
         this.stockRepo=stockRepository;
         this.prodRepo=productRepository;
+        this.cacheManager=cacheManager;
     }
 
     @Transactional(propagation = Propagation.REQUIRED)
@@ -62,7 +65,9 @@ public class StockService {
                         stock.getAvailableQty(), orderEntry.getQuantity());
             throw new InsufficientStockException("Not Enough Stocks "+stock.getAvailableQty());
         }
+
         Stock savedStock=stockRepo.save(stock);
+        cacheManager.getCache("products").evict(orderEntry.getPid());
         return savedStock;
     }
     @Transactional(readOnly = true)
@@ -138,6 +143,7 @@ public class StockService {
         return mapToEntitysr(stock);
     }
 
+//    evict 4
     @Transactional
     public StockResponse updateStock(Long id, StockUpdateRequest updateRequest)
     {
@@ -158,8 +164,10 @@ public class StockService {
         }
 
         stock=stockRepo.save(stock);
+        cacheManager.getCache("products").evict(stock.getProduct().getPid());
         return mapToEntitysr(stock);
     }
+//    evict 3
     @Transactional
     public StockResponse addStock(Long id, StockUpdateRequest updateRequest)
     {
@@ -170,7 +178,10 @@ public class StockService {
                 id, stock.getAvailableQty(), stock.getAvailableQty() + updateRequest.getNewQuantity());
         stock.setAvailableQty(stock.getAvailableQty()+updateRequest.getNewQuantity());
         stock=stockRepo.save(stock);
+
         log.info("addStock completed for stockId={}, newAvailableQty={}", id, stock.getAvailableQty());
+        cacheManager.getCache("products").evict(stock.getProduct().getPid());
+
         return mapToEntitysr(stock);
     }
     @Transactional(propagation = Propagation.REQUIRED)

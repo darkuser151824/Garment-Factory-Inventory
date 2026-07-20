@@ -12,6 +12,8 @@ import com.example.demo.repository.OrderRepository;
 import com.example.demo.repository.ProductRepository;
 import com.example.demo.repository.StockRepository;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,12 +26,14 @@ public class OrderItemService {
     private ProductRepository productRepository;
     private StockService stockService;
     private StockRepository stockRepository;
+    private CacheManager cacheManager;
 
-    OrderItemService(StockRepository stockRepository,ProductRepository productRepository,StockService stockService)
+    OrderItemService(CacheManager cacheManager,StockRepository stockRepository,ProductRepository productRepository,StockService stockService)
     {
         this.productRepository=productRepository;
         this.stockService=stockService;
         this.stockRepository=stockRepository;
+        this.cacheManager=cacheManager;
     }
 
     @Transactional(propagation = Propagation.REQUIRED)
@@ -61,6 +65,7 @@ public class OrderItemService {
         orderItem.setTotalProfitOfItem(orderItem.getTotalAmountOfItem().subtract(orderItem.getTotalCostOfItem()));
         return orderItem;
     }
+// /   evict 6
     @Transactional(propagation = Propagation.REQUIRED)
     public void deleteOrderItem(OrderItem orderItem)
     {
@@ -77,6 +82,7 @@ public class OrderItemService {
         log.info("Stock quantity restored to {} from {]",stock.getAvailableQty()+orderItem.getQuantity(),stock.getAvailableQty());
         stockRepository.save(stock);
         orderItem.setDeleted(true);
+        cacheManager.getCache("products").evict(orderItem.getProduct().getPid());
     }
 
 
