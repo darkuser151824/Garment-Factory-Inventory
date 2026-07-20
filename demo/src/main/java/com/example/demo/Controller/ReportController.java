@@ -1,6 +1,6 @@
 package com.example.demo.Controller;
 
-import com.example.demo.dto.RevenueReportDto;
+import com.example.demo.dto.*;
 import com.example.demo.enums.GroupBy;
 import com.example.demo.enums.Period;
 import com.example.demo.projection.*;
@@ -34,24 +34,24 @@ public class ReportController {
         return reportService.getRevenueReport(groupBy,period,count);
     }
     @GetMapping("/user_revenue")
-    public List<UserRevenueProjection> getRevenueByUser(
-            @RequestParam String period,
+    public UserRevenueDto getRevenueByUser(
+            @RequestParam Period period,
             @RequestParam int count
     ) {
         return reportService.getUserRevenueReport(period,count);
     }
     @GetMapping("/product_quantity")
-    public List<ProductQuantityProjection> getQuantityByProduct(){
+    public ProductQuantityDto getQuantityByProduct(){
         return reportService.getQuantityByProduct();
 
     }
     @GetMapping("/status_order")
-    public List<StatusOrder> getOrderByStatus(){
+    public StatusOfOrderDto getOrderByStatus(){
         return reportService.getOrderByStatus();
 
     }
     @GetMapping("/stock-health")
-    public List<StockHealthProjection> getStockHealth() {
+    public StockHealthDto getStockHealth() {
         return reportService.getStockHealth();
     }
 
