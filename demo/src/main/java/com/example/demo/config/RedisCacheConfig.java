@@ -26,6 +26,9 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.fasterxml.jackson.databind.jsontype.impl.LaissezFaireSubTypeValidator;
 
 import java.time.Duration;
+import java.util.Map;
+
+
 
 @Slf4j
 @Configuration
@@ -46,17 +49,27 @@ public class RedisCacheConfig extends CachingConfigurerSupport {
 
         GenericJackson2JsonRedisSerializer serializer =
                 new GenericJackson2JsonRedisSerializer(objectMapper);
-        RedisCacheConfiguration config=RedisCacheConfiguration.defaultCacheConfig()
-                .entryTtl(Duration.ofHours(24))
+        RedisCacheConfiguration base=RedisCacheConfiguration.defaultCacheConfig()
                 .serializeValuesWith(
                         RedisSerializationContext.SerializationPair.fromSerializer(
                                 serializer  // ← use this, not new GenericJackson2JsonRedisSerializer()
                         )
                 );
+        Map<String,RedisCacheConfiguration> perCacheConfig=Map.of(
+                "products",base.entryTtl(Duration.ofHours(24)),
+                "revenue",base.entryTtl(Duration.ofHours(6)),
+                "user_revenue",base.entryTtl(Duration.ofHours(6)),
+                "stock_health",base.entryTtl(Duration.ofMinutes(20)),
+                "status_order",base.entryTtl(Duration.ofMinutes(20)),
+                "product_quantity",base.entryTtl(Duration.ofHours(20)),
+                "Idempotency_key",base.entryTtl(Duration.ofHours(20))
+
+        );
 
         return RedisCacheManager
                 .builder(connectionFactory)
-                .cacheDefaults(config)
+                .cacheDefaults(base.entryTtl(Duration.ofHours(24)))//fallback for the cache not configured
+                .withInitialCacheConfigurations(perCacheConfig)
                 .build();
     }
 

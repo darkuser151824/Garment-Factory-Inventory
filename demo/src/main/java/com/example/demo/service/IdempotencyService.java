@@ -6,6 +6,8 @@ import com.example.demo.enums.IdempotencyStatus;
 import com.example.demo.exception.ResourceNotFoundException;
 import com.example.demo.repository.IdempotencyKeyRepository;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -18,14 +20,16 @@ import java.util.Optional;
 public class IdempotencyService {
 
     private IdempotencyKeyRepository idempotencyKeyRepository;
+    private CacheManager cacheManager;
 
-    IdempotencyService(IdempotencyKeyRepository idempotencyKeyRepository)
+    IdempotencyService(CacheManager cacheManager,IdempotencyKeyRepository idempotencyKeyRepository)
     {
+        this.cacheManager=cacheManager;
         this.idempotencyKeyRepository=idempotencyKeyRepository;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public Optional<IdempotencyKey> initiateOrGetExisting(String key, String requestHash) {
+    public Optional<IdempotencyKey> initiateOrGetExistingFromDb(String key, String requestHash) {
         if(idempotencyKeyRepository.existsById(key))
         {
             IdempotencyKey idempotencyKey1=idempotencyKeyRepository.findById(key).orElseThrow(()->new ResourceNotFoundException("Key not found neither inserted"));
@@ -52,5 +56,7 @@ public class IdempotencyService {
         idempotencyKey.setHttpStatus(httpStatus);
         idempotencyKey.setResourceId(resourceId);
         idempotencyKeyRepository.save(idempotencyKey);
+        Cache cache=cacheManager.getCache("Idempotency_key");
+        cache.put(key,idempotencyKey);
     }
 }

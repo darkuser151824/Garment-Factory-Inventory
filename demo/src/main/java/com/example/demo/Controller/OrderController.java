@@ -8,6 +8,7 @@ import com.example.demo.entity.IdempotencyKey;
 import com.example.demo.enums.IdempotencyStatus;
 import com.example.demo.enums.Status;
 import com.example.demo.exception.ApiResponse;
+import com.example.demo.service.IdempotencyRedisService;
 import com.example.demo.service.IdempotencyService;
 import com.example.demo.service.OrderService;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -37,8 +38,10 @@ public class OrderController {
     private ObjectMapper objectMapper;
 
     private IdempotencyService idempotencyService;
-    public OrderController(OrderService orderService,IdempotencyService idempotencyService)
+    private IdempotencyRedisService idempotencyRedisService;
+    public OrderController(IdempotencyRedisService idempotencyRedisService,OrderService orderService,IdempotencyService idempotencyService)
     {
+        this.idempotencyRedisService=idempotencyRedisService;
         this.orderService=orderService;
         this.idempotencyService=idempotencyService;
     }
@@ -58,13 +61,13 @@ public class OrderController {
 
     @PostMapping
     @PreAuthorize("hasRole('ADMIN') or hasRole('WORKER')")
-    public ResponseEntity<ApiResponse<OrderResponseRequest>> postOrder(@Valid @RequestBody OrderEntryRequest orderEntryRequest,@RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) throws JsonProcessingException {
+    public ResponseEntity<ApiResponse<OrderResponseRequest>> createOrder(@Valid @RequestBody OrderEntryRequest orderEntryRequest,@RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) throws JsonProcessingException {
         if(idempotencyKey == null) {
             return ResponseEntity.status(400).body(new ApiResponse<>(false, "Idempotency-Key header is required", null));
         }
         String json = objectMapper.writeValueAsString(orderEntryRequest);
         String orderEntryHash = DigestUtils.md5DigestAsHex(json.getBytes());
-        Optional<IdempotencyKey> idempotencyKey1=idempotencyService.initiateOrGetExisting(idempotencyKey,orderEntryHash);
+        Optional<IdempotencyKey> idempotencyKey1=idempotencyRedisService.initiateOrGetExisting(idempotencyKey,orderEntryHash);
         if(idempotencyKey1.isEmpty())
         {
             OrderResponseRequest orderResponseRequest=orderService.createOrder(orderEntryRequest);

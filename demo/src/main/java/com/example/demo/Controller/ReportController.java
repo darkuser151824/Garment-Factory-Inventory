@@ -4,6 +4,7 @@ import com.example.demo.dto.*;
 import com.example.demo.enums.GroupBy;
 import com.example.demo.enums.Period;
 import com.example.demo.projection.*;
+import com.example.demo.service.ReportRedisService;
 import com.example.demo.service.ReportService;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,9 +20,11 @@ import java.util.List;
 public class ReportController {
 
     private final ReportService reportService;
+    private ReportRedisService reportRedisService;
 
-    public ReportController(ReportService reportService) {
+    public ReportController(ReportService reportService,ReportRedisService reportRedisService) {
         this.reportService = reportService;
+        this.reportRedisService=reportRedisService;
     }
 
     @GetMapping("/revenue")
@@ -31,28 +34,28 @@ public class ReportController {
             @RequestParam int count,
             @RequestParam(required = false) GroupBy groupBy
     ) {
-        return reportService.getRevenueReport(groupBy,period,count);
+        return reportRedisService.getRevenueReport(groupBy,period,count);
     }
     @GetMapping("/user_revenue")
     public UserRevenueDto getRevenueByUser(
             @RequestParam Period period,
             @RequestParam int count
     ) {
-        return reportService.getUserRevenueReport(period,count);
+        return reportRedisService.getUserRevenueReport(period,count);
     }
     @GetMapping("/product_quantity")
     public ProductQuantityDto getQuantityByProduct(){
-        return reportService.getQuantityByProduct();
+        return reportRedisService.getQuantityByProduct();
 
     }
     @GetMapping("/status_order")
     public StatusOfOrderDto getOrderByStatus(){
-        return reportService.getOrderByStatus();
+        return reportRedisService.getOrderByStatus();
 
     }
     @GetMapping("/stock-health")
     public StockHealthDto getStockHealth() {
-        return reportService.getStockHealth();
+        return reportRedisService.getStockHealth();
     }
 
 

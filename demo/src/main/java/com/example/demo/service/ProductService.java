@@ -85,21 +85,13 @@ public class ProductService {
 
 
 
-
     @Transactional(readOnly = true)
-    public ProductRespsonseRequest getProductById(Long id) {
-        Cache cache=cacheManager.getCache("products");
-        ProductRespsonseRequest cached=cache.get(id,ProductRespsonseRequest.class);
-        if(cached!=null){
-            return cached;
-        }
+    public ProductRespsonseRequest getProductFromDb(Long id){
         log.info("Get product by id called for product {} ",id);
         Product product=productRepo.findById(id).orElseThrow(()->new ResourceNotFoundException("Product with id "+id+" NOt found."));
-
         Map<Size, Stock>  stockMap=stockService.getStockForProduct(product);
         ProductRespsonseRequest productRespsonseRequest=productMapper.mapToEntityPrr(product,stockMap);
         log.info("Product {} fetched successfully ",id);
-        cache.put(id,productRespsonseRequest);
         return productRespsonseRequest;
     }
 

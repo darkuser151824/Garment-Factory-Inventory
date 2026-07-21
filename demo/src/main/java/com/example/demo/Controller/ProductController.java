@@ -9,6 +9,7 @@ import com.example.demo.enums.Garment;
 import com.example.demo.enums.Size;
 import com.example.demo.exception.ApiResponse;
 import com.example.demo.exception.ResourceNotFoundException;
+import com.example.demo.service.ProductRedisService;
 import com.example.demo.service.ProductService;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
@@ -29,9 +30,11 @@ import java.util.Optional;
 @RequestMapping(path="/api/products",produces = "application/json")
 public class ProductController {
     private ProductService prodService;
+    private ProductRedisService productRedisService;
 
-    public ProductController(ProductService productService)
+    public ProductController(ProductService productService,ProductRedisService productRedisService)
     {
+        this.productRedisService=productRedisService;
         this.prodService=productService;
     }
     @PutMapping("/{id}")
@@ -79,7 +82,7 @@ public class ProductController {
     @PreAuthorize("hasRole('ADMIN') or hasRole('WORKER')")
     public ResponseEntity<ApiResponse<ProductRespsonseRequest>> getProductById(@PathVariable("id") Long id)
     {
-        ProductRespsonseRequest productRespsonseRequest=prodService.getProductById(id);
+        ProductRespsonseRequest productRespsonseRequest=productRedisService.getProductById(id);
         return ResponseEntity.status(200).body(new ApiResponse<>(true,"Product with "+id+" Fetched successfully",productRespsonseRequest));
     }
 

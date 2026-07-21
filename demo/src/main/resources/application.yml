@@ -1,0 +1,32 @@
+
+spring:
+  cache:
+    type: redis
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+      username: ${SPRING_DATA_REDIS_USERNAME:}
+      password: ${SPRING_DATA_REDIS_PASSWORD:}
+      timeout: 300ms
+  # ...datasource, jpa, and anything else that was already here
+
+resilience4j:
+  retry:
+    instances:
+      redisCache:
+        max-attempts: 2
+        wait-duration: 100ms
+        ignore-exceptions:
+          - io.github.resilience4j.circuitbreaker.CallNotPermittedException
+  circuitbreaker:
+    instances:
+      redisCache:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 15
+        minimum-number-of-calls: 8
+        failure-rate-threshold: 40
+        slow-call-duration-threshold: 200ms
+        slow-call-rate-threshold: 70
+        wait-duration-in-open-state: 15s
+        register-health-indicator: true
